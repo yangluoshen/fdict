@@ -88,6 +88,7 @@ void testcase()
     printf ("[%s,%d,%d] found\n", s->name, s->age, s->sex); 
 
     fdict_release(d);
+    free(ani0); free(ani1); free(ani2); free(ani3);
 }
 
 int main(int argc, char* argv[])
