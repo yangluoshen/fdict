@@ -199,14 +199,6 @@ void print_dict(fdict* d)
 
 void testcase1()
 {
-    puts("testcase1");
-    fdict* d;
-    GENERATE_DICT(d,10);
-    fdict_release(d);
-}
-
-void testcase2()
-{
     fdict* d;
     GENERATE_DICT(d,10);
     
@@ -220,9 +212,10 @@ void testcase2()
     assert(s);
     printf ("testcase2: [%d]-[%d] found\n", s->id, s->value); 
     fdict_release(d);
+    free (node1);
 }
 
-void testcase3()
+void testcase2()
 {
     puts("testcase3");
     fdict* d;
@@ -246,57 +239,15 @@ void testcase3()
     assert(FDICT_SUCCESS!=fdict_remove(d, &node15->id));
     assert(FDICT_SUCCESS==fdict_remove(d, &node3->id));
     print_dict(d);
-}
 
-void testcase4()
-{
-    puts("testcase4");
-    fdict* d;
-    GENERATE_DICT(d, 106);
-    const int MAX_NODE_NUM = 300;
-    node** nlist = (node**) malloc(MAX_NODE_NUM*sizeof(node*));
-    if (!nlist) assert(NULL);
-    int i;
-    for (i=0; i < MAX_NODE_NUM; ++i){
-        nlist[i] = generate(i,i);
-    }
-    
-    for (i=0; i < MAX_NODE_NUM; ++i){
-        fdict_insert(d, &(nlist[i]->id), nlist[i]);
-    }
-    print_dict(d);
-
-    int key = 107; 
-    node* s = fdict_find(d, &key);
-    assert(s);
-    printf ("[%d]-[%d] found\n", s->id, s->value); 
-
-    for (i=0; i < MAX_NODE_NUM; ++i){
-        fdict_insert(d, &(nlist[i]->id), nlist[i]);
-    }
-    print_dict(d);
-
-    for (i=0; i<MAX_NODE_NUM; ++i){
-        fdict_remove(d, &(nlist[i]->id));
-    }
-    print_dict(d);
-
-    // release resource
     fdict_release(d);
-    for (i=0; i<MAX_NODE_NUM;++i){
-        free(nlist[i]);
-        nlist[i] = NULL;
-    }
-    free(nlist);
-    nlist = NULL;
+    free(node1); free(node2); free(node3); free(node5); free(node15);
 }
 
 int main()
 {
     testcase1();
     testcase2();
-    testcase3();
-    testcase4();
 
     return 0;
 }

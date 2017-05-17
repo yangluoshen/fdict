@@ -37,7 +37,8 @@ void flist_release(flist* l)
     }
     free (l);
 }
-
+#if 0
+/*flist append with "bad taste"*/
 fnode* flist_append(flist* l, void* val)
 {
     if (!l) return NULL;
@@ -56,6 +57,23 @@ fnode* flist_append(flist* l, void* val)
     }
     return addn;
 }
+#endif
+
+/*flist append with "good taste"*/
+fnode* flist_append(flist* l, void* val)
+{
+    if (!l) return NULL;
+    fnode** indirect = &l->next;
+    while(*indirect)
+        indirect = &((*indirect)->next);
+    //if l is a loop list, then GG(dead loop)
+
+    fnode* addn = generate_fnode(val);
+    if (!addn) return NULL;
+    *indirect = addn;
+    return addn;
+}
+
 
 #if 0
 /*flist delete with "bad taste"*/
