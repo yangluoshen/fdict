@@ -7,10 +7,10 @@
 /*@return : 0 means num is not a prime
  *          1 means num is a prime
  */
-int is_prime(size_t num)
+int is_prime(index_t num)
 {
-    size_t i;
-    size_t t = num / 2;
+    index_t i;
+    index_t t = num / 2;
     for (i = 2; i < t; ++i){
         if (0 == (num % i))
             return 0;
@@ -18,12 +18,12 @@ int is_prime(size_t num)
     return 1;
 }
 
-size_t get_good_hashnum(size_t hash_size)
+index_t get_good_hashnum(index_t hash_size)
 {
     if (hash_size < MIN_HASHNUM)
         return hash_size;
-    size_t t = hash_size / HASHNUM_DIV;
-    size_t i = t;
+    index_t t = hash_size / HASHNUM_DIV;
+    index_t i = t;
     for (i = t; i < hash_size; ++i){
         if (is_prime(i))
             return i;
@@ -34,15 +34,15 @@ size_t get_good_hashnum(size_t hash_size)
 }
 
 #if 0
-size_t __hash_calc(fdict* d, fdict_key_t key)
+index_t __hash_calc(fdict* d, fdict_key_t key)
 {
     if (!d || !key) return -1;
-    size_t hash = *((size_t*)key) % d->hash_size;
+    index_t hash = *((index_t*)key) % d->hash_size;
     return hash;
 }
 #endif
 
-fdict* fdict_create(size_t hash_size, hash_match_func match, hash_calc_func calc)
+fdict* fdict_create(unsigned int hash_size, hash_match_func match, hash_calc_func calc)
 {
     hash_size = get_good_hashnum(hash_size);
     if (0 == hash_size) return NULL;
@@ -60,12 +60,12 @@ fdict* fdict_create(size_t hash_size, hash_match_func match, hash_calc_func calc
         return NULL;
     }
 
-    size_t i = 0;
+    index_t i = 0;
     for (; i < hash_size; ++i){
         d->hash_list[i] = flist_create(d->match);
         // if create failed, release the resource alloced
         if (!d->hash_list[i]){
-            int j;
+            index_t j;
             for (j=0; j < i; ++j){
                 free(d->hash_list[j]);
                 d->hash_list[j] = NULL;
@@ -82,7 +82,7 @@ fdict* fdict_create(size_t hash_size, hash_match_func match, hash_calc_func calc
 void fdict_release(fdict* d)
 {
     if (!d) return;
-    size_t i = 0;
+    index_t i = 0;
     for (; i < d->hash_size; ++i){
         flist_release(d->hash_list[i]);
     }
@@ -101,7 +101,7 @@ int fdict_insert(fdict* d, fdict_key_t key, void* val)
     if (!d) return FDICT_FAILED;
     if (fdict_find(d, key)) return FDICT_EXIST;
 
-    size_t hash_slot = d->calc(d, key);
+    index_t hash_slot = d->calc(d, key);
     if (-1==hash_slot || hash_slot>=d->hash_size) 
         return FDICT_FAILED;
 
@@ -115,7 +115,7 @@ void* fdict_find(fdict* d, fdict_key_t key)
 {
     if (!d) return NULL;
     fnode* n;
-    size_t hash_slot = d->calc(d, key);
+    index_t hash_slot = d->calc(d, key);
     if (-1 == hash_slot || hash_slot >= d->hash_size)
         n = NULL;
     n = flist_find(d->hash_list[hash_slot], key);
@@ -128,7 +128,7 @@ int fdict_remove(fdict* d, fdict_key_t key)
     fnode* n = fdict_find(d, key);
     if (!n) return FDICT_NOTEXIST;
     
-    size_t hash_slot = d->calc(d, key);
+    index_t hash_slot = d->calc(d, key);
     if (-1==hash_slot || hash_slot>=d->hash_size)
         return FDICT_FAILED;
 
@@ -136,8 +136,51 @@ int fdict_remove(fdict* d, fdict_key_t key)
     return FDICT_SUCCESS;
 }
 
+/* key为整数的散列函数
+ * 一个简单的散列函数
+ * 注意: 要留意原key的类型是否与index_t是一致的。
+ * 若不一致，不应该使用此散列函数，否则可能会导致错误，
+ * 尤其是key的类型字节长为比index_t小时（如short,char,unsigned char）
+ */
+index_t hash_calc_int(fdict* d, fdict_key_t key)
+{
+    if (!d || !key) return -1;
+    index_t hash = *((index_t*)key) % d->hash_size;
+    return hash;
+}
+
+/* key 为字符串的散列函数
+ * 计算简单，但是不适合key特别长的情况
+ * 因为key太长的话，此散列函数会花很多时间计算
+ */
+index_t hash_calc_str0(fdict* d, fdict_key_t key)
+{
+    index_t hash = 0;
+    char* k = (char*)key;
+    while(*k != 0){
+        hash = (hash << 5) + *k++;
+    }
+    return (index_t) (hash % d->hash_size);
+}
+
+index_t hash_calc_str1(fdict* d, fdict_key_t key)
+{
+    if (!d || !key) return -1;
+    
+    char* name = (char*) key;
+    unsigned int hash = 0;
+    while(*name){
+        hash = (hash << 4) + *name;
+        hash ^= (hash & 0xF0000000) >> 24;
+        name++;
+    }
+    hash &= 0x0FFFFFFF;
+    return (index_t) (hash % d->hash_size);
+}
+
 #ifdef FDICT_MAIN
 #include <assert.h>
+#include <stdio.h>
 
 typedef struct {
     int value;
@@ -153,22 +196,16 @@ node* generate(int id, int val)
     return n;
 }
 
-size_t calc_func(fdict* d, fdict_key_t key)
-{
-    if (!d || !key) return -1;
-    int hash = *((int*)key) % d->hash_size;
-    return (size_t)hash;
-}
 int match_func(void* ptr, fdict_key_t key)
 {
     if (!ptr || !key) return 0;
     node* n = (node*) ptr;
-    return (n->id == *(int*)key) ? 1 : 0;
+    return n->id == *(int*)key;
 }
 
 #define GENERATE_DICT(d, s) \
     do {\
-        (d) = fdict_create((s), match_func, calc_func);\
+        (d) = fdict_create((s), match_func, hash_calc_int);\
         assert(d);\
     }while(0)
 
@@ -189,9 +226,9 @@ void print_dict(fdict* d)
 {
     if (!d) return;
     puts("");
-    size_t i; 
+    index_t i; 
     for (i = 0; i < d->hash_size; ++i){
-        printf("[%2lu]:", i);
+        printf("[%2u]:", i);
         print_list(d->hash_list[i]);
     }
     puts("");

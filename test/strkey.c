@@ -3,6 +3,7 @@
 #include <string.h>
 #include <malloc.h>
 #include <assert.h>
+#include <stdio.h>
 
 #define MAX_NAME_LEN (8)
 typedef struct {
@@ -11,20 +12,6 @@ typedef struct {
     int sex;
 }animal;
 
-size_t animal_hash_calc(fdict* d, fdict_key_t key)
-{
-    if (!d || !key) return -1;
-    
-    char* name = (char*) key;
-    unsigned int hash = 0;
-    while(*name){
-        hash = (hash << 4) + *name;
-        hash ^= (hash & 0xF0000000) >> 24;
-        name++;
-    }
-    hash &= 0x0FFFFFFF;
-    return (size_t) (hash % d->hash_size);
-}
 
 int animal_hash_match(void* ani, fdict_key_t key)
 {
@@ -59,9 +46,9 @@ void print_ani_dict(fdict* d)
 {
     if (!d) return;
     puts("");
-    size_t i; 
+    index_t i; 
     for (i = 0; i < d->hash_size; ++i){
-        printf("[%2lu]:", i);
+        printf("[%2u]:", i);
         print_ani_list(d->hash_list[i]);
     }
     puts("");
@@ -69,7 +56,7 @@ void print_ani_dict(fdict* d)
 
 void testcase()
 {
-    fdict* d = fdict_create(3, animal_hash_match, animal_hash_calc);
+    fdict* d = fdict_create(3, animal_hash_match, hash_calc_str0);
     assert(d);
     
     animal* ani0 = generate_ani("dog", 3, 1);

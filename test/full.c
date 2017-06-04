@@ -2,6 +2,7 @@
 #include "fdict.h"
 #include <assert.h>
 #include <malloc.h>
+#include <stdio.h>
 
 typedef struct {
     int value;
@@ -17,12 +18,6 @@ node* generate(int id, int val)
     return n;
 }
 
-size_t calc_func(fdict* d, fdict_key_t key)
-{
-    if (!d || !key) return -1;
-    int hash = *((int*)key) % d->hash_size;
-    return (size_t)hash;
-}
 int match_func(void* ptr, fdict_key_t key)
 {
     if (!ptr || !key) return 0;
@@ -32,7 +27,7 @@ int match_func(void* ptr, fdict_key_t key)
 
 #define GENERATE_DICT(d, s) \
     do {\
-        (d) = fdict_create((s), match_func, calc_func);\
+        (d) = fdict_create((s), match_func, hash_calc_int);\
         assert(d);\
     }while(0)
 
@@ -53,9 +48,9 @@ void print_dict(fdict* d)
 {
     if (!d) return;
     puts("");
-    size_t i; 
+    index_t i; 
     for (i = 0; i < d->hash_size; ++i){
-        printf("[%2lu]:", i);
+        printf("[%2u]:", i);
         print_list(d->hash_list[i]);
     }
     puts("");
