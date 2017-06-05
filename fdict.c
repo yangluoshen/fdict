@@ -18,7 +18,7 @@ int is_prime(index_t num)
     return 1;
 }
 
-index_t get_good_hashnum(index_t hash_size)
+index_t get_better_hashnum(index_t hash_size)
 {
     if (hash_size < MIN_HASHNUM)
         return hash_size;
@@ -33,18 +33,9 @@ index_t get_good_hashnum(index_t hash_size)
     return i;
 }
 
-#if 0
-index_t __hash_calc(fdict* d, fdict_key_t key)
-{
-    if (!d || !key) return -1;
-    index_t hash = *((index_t*)key) % d->hash_size;
-    return hash;
-}
-#endif
-
 fdict* fdict_create(unsigned int hash_size, hash_match_func match, hash_calc_func calc)
 {
-    hash_size = get_good_hashnum(hash_size);
+    hash_size = get_better_hashnum(hash_size);
     if (0 == hash_size) return NULL;
     if (!match || !calc) return NULL;
     
@@ -105,7 +96,7 @@ int fdict_insert(fdict* d, fdict_key_t key, void* val)
     if (-1==hash_slot || hash_slot>=d->hash_size) 
         return FDICT_FAILED;
 
-    if (!flist_append(d->hash_list[hash_slot], val))
+    if (!flist_push(d->hash_list[hash_slot], val))
         return FDICT_FAILED;
 
     return FDICT_SUCCESS;

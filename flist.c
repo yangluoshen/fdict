@@ -74,6 +74,18 @@ fnode* flist_append(flist* l, void* val)
     return addn;
 }
 
+fnode* flist_push(flist* l, void* val)
+{
+    if (!l) return NULL;
+    fnode* addn = generate_fnode(val);
+    if (!addn) return NULL;
+
+    addn->next = l->next;
+    l->next = addn;
+
+    return addn;
+}
+
 
 #if 0
 /*flist delete with "bad taste"*/

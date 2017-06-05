@@ -17,6 +17,7 @@ flist* flist_create(int (*match)(void*, void*));
 void flist_init(flist* l);
 void flist_release(flist *l);
 fnode* flist_append(flist* l, void* val);
+fnode* flist_push(flist* l, void* val);
 void flist_delete(flist* l, void* val);
 fnode* flist_find(flist* l, void* val);
 
