@@ -1,8 +1,31 @@
+/*  fdict -- A C hash table implemented with seperate chaining.
+ *
+ *  Copyright (c) 2017, yangluo shen <yangluoshen at gmail dot com>
+
+ *  Permission is hereby granted, free of charge, to any person obtaining a copy
+ *  of this software and associated documentation files (the "Software"), to deal
+ *  in the Software without restriction, including without limitation the rights
+ *  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ *  copies of the Software, and to permit persons to whom the Software is
+ *  furnished to do so, subject to the following conditions:
+
+ *  The above copyright notice and this permission notice shall be included in all
+ *  copies or substantial portions of the Software.
+
+ *  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ *  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ *  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ *  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ *  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ *  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ *  SOFTWARE.
+ */
+
 #include "fdict.h"
 #include <malloc.h>
 
 #define MIN_HASHNUM (100)
-#define HASHNUM_DIV (7)
+#define HASHNUM_DIV (17)
 
 /*@return : 0 means num is not a prime
  *          1 means num is a prime
@@ -108,17 +131,11 @@ void* fdict_find(fdict* d, fdict_key_t key)
     fnode* n;
     index_t hash_slot = d->calc(d, key);
     if (-1 == hash_slot || hash_slot >= d->hash_size)
-        n = NULL;
+        return NULL;
     n = flist_find(d->hash_list[hash_slot], key);
     return n ? n->val : NULL;
 }
-
-int fdict_remove(fdict* d, fdict_key_t key)
-{
-    if (!d) return FDICT_FAILED;
-    fnode* n = fdict_find(d, key);
-    if (!n) return FDICT_NOTEXIST;
-    
+int fdict_remove(fdict* d, fdict_key_t key) { if (!d) return FDICT_FAILED; fnode* n = fdict_find(d, key); if (!n) return FDICT_NOTEXIST; 
     index_t hash_slot = d->calc(d, key);
     if (-1==hash_slot || hash_slot>=d->hash_size)
         return FDICT_FAILED;

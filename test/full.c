@@ -60,8 +60,8 @@ void testcase()
 {
     puts("testcase4");
     fdict* d;
-    GENERATE_DICT(d, 106);
-    const int MAX_NODE_NUM = 300;
+    const int MAX_NODE_NUM = 10000;
+    GENERATE_DICT(d, MAX_NODE_NUM);
     node** nlist = (node**) malloc(MAX_NODE_NUM*sizeof(node*));
     if (!nlist) assert(NULL);
     int i;
