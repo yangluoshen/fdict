@@ -1,6 +1,6 @@
 # fdict
 
-C实现的字典（hash table)
+C hash table implemented with seperate chaining.
 
 ## Usage
 
@@ -22,6 +22,8 @@ or
 * 散列函数备选方案
   * **hash_calc_int** : key为unsigned int 的散列函数
   * **hash_calc_str0** 和 **hash_calc_str1** : key 为字符串的散列函数
+
+* rehash
 
 ## Interesting
 
