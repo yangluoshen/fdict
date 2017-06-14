@@ -25,73 +25,70 @@
 #include "dict.h"
 #include <malloc.h>
 #include <string.h>
+#include <stdio.h>
 
 #define MIN_HASHNUM (100)
-#define HASHNUM_DIV (17)
+#define HASHNUM_DIV (5)
+#define FILL_FACTOR (50)
 
 #define dict_free_key(d, entry) \
     if ((d)->op->key_destructor) \
-        (d)->op->key_destructor((entry)->key)
+        (d)->op->key_destructor((entry)->key.ptr)
 
 #define dict_free_val(d, entry) \
     if ((d)->op->val_destructor) \
-        (d)->op->val_destructor((entry)->val.v)
+        (d)->op->val_destructor((entry)->val.ptr)
 
-#define dict_hash(d, key)  ((d)->op->hash_func((d)->size, key))
+#define dict_hash(size, key)  ((d)->op->hash_func(size, key))
 
 #define dict_key_compare(d, key1, key2) \
     ((d)->op->key_comp ? (d)->op->key_comp(key1, key2) : \
         (key1) == (key2)) 
 
 #define dict_set_key(d, entry, _key) \
-    do{(entry)->key = (d)->op->key_dup ? (d)->op->key_dup(_key) : _key;}while(0)
+    do{(entry)->key.ptr = (d)->op->key_dup ? (d)->op->key_dup(_key) : _key;}while(0)
 
 #define dict_set_val(d, entry, _val) \
-    do{(entry)->val.v = (d)->op->val_dup ? (d)->op->val_dup(_val) : _val;}while(0)
+    do{(entry)->val.ptr = (d)->op->val_dup ? (d)->op->val_dup(_val) : _val;}while(0)
 
-uint64_t prime_pool[] = {13,31,61,127,251,509,1021,2039,4093,8191,16381,32749,65521,131071,262139,524287,1048573,2097143,4194301,8388593,16777213,33554393,67108859,134217689,268435399,536870909,1073741789,2147483647};
+#define is_need_rehash(d) ((((d)->ht[d->serve].used * 100) / (_hash_size(d) * HASHNUM_DIV)) > FILL_FACTOR)
 
-#if 0
-/*@return : 0 means num is not a prime
- *          1 means num is a prime
- */
-int is_prime(index_t num)
+#define serve_table(d) ((d)->ht[(d)->serve].table)
+#define idle_table(d) ((d)->ht[!(d)->serve].table)
+#define dict_incr(d) do{((d)->ht[(d)->serve].used++);}while(0)
+#define dict_decr(d) do{((d)->ht[(d)->serve].used--);}while(0)
+#define table_swap(d) do{(d)->serve = !(d)->serve;}while(0)
+#define _hash_size(d) ((d)->ht[(d)->serve].size)
+
+
+uint32_t prime_pool[] = {13,31,61,127,251,509,1021,2039,4093,8191,16381,32749,65521,131071,262139,524287,1048573,2097143,4194301,8388593,16777213,33554393,67108859,134217689,268435399,536870909,1073741789,2147483647};
+
+uint32_t _get_next_hashsize(uint32_t size)
 {
-    index_t i;
-    index_t t = num / 2;
-    for (i = 2; i < t; ++i){
-        if (0 == (num % i))
-            return 0;
-    }
-    return 1;
+    uint32_t i;
+    uint32_t n = sizeof(prime_pool)/sizeof(prime_pool[0]);
+    for (i=0; i < n; ++i)
+        if (prime_pool[i] > size)
+            return prime_pool[i];
+
+    return prime_pool[n-1];
 }
 
-index_t get_better_hashnum(index_t hash_size)
-{
-    if (hash_size < MIN_HASHNUM)
-        return hash_size;
-    index_t t = hash_size / HASHNUM_DIV;
-    index_t i = t;
-    for (i = t; i < hash_size; ++i){
-        if (is_prime(i))
-            return i;
-    }
-    if (0 == (i % 2)) i += 1;
-
-    return i;
-}
-#endif
-
-int  _dict_init(dict* d, const dict_option* op)
+int  _dict_init(dict* d, const dict_option* op, uint32_t hashsize)
 {
     d->op = (dict_option*) malloc(sizeof(dict_option));
     if (!d->op) return -1;
 
-    d->ht = (dict_entry**) malloc(d->size * sizeof(dict_entry*));
-    if (!d->ht) {
+    d->serve = 0;
+    serve_table(d) = (dict_entry**) malloc(hashsize * sizeof(dict_entry*));
+    if (!serve_table(d)) {
         free (d->op);
         return -1;
     }
+    d->ht[d->serve].size = hashsize;
+    d->ht[d->serve].used = 0;
+
+    d->ht[!d->serve].table = NULL;
     
     d->op->hash_func = op->hash_func;
     d->op->key_dup = op->key_dup;
@@ -100,21 +97,15 @@ int  _dict_init(dict* d, const dict_option* op)
     d->op->key_destructor = op->key_destructor;
     d->op->val_destructor = op->val_destructor;
 
-    d->used = 0;
     return 0;
 }
 
-dict* dict_create(const dict_option* op)
+dict* _dict_create(const dict_option* op, uint32_t hashsize)
 {
-    if (!op) return NULL;
     dict* d = (dict*) malloc(sizeof(dict));
     if (!d) return NULL;
 
-    if (!op->hash_func) return NULL;
-
-    d->size = prime_pool[0];
-    
-    if (-1 == _dict_init(d, op)){
+    if (-1 == _dict_init(d, op, hashsize)){
         free (d);
         return NULL;
     }
@@ -122,46 +113,62 @@ dict* dict_create(const dict_option* op)
     return d;
 }
 
-void dict_release(dict* d)
+dict* dict_create(const dict_option* op)
 {
-    if (!d) return;
+    if (!op || !op->hash_func) return NULL;
 
-    int i;
-    for (i=0; i<d->size; ++i){
-        if (d->ht[i] == NULL) continue;
+    return _dict_create(op, prime_pool[0]);
+}
 
-        dict_entry** indirect = &(d->ht[i]);
+void _clear_hash_table(dict* d, dict_entry** table, uint32_t size)
+{
+    uint32_t i;
+    for (i=0; i<size; ++i){
+        if (table[i] == NULL) continue;
+
+        dict_entry** indirect = &(table[i]);
         while (*indirect) {
             dict_entry* he = *indirect;
 
             dict_free_key(d, he);
             dict_free_val(d, he);
-            
             free (he);
-            d->used --;
-
             // next loop
             indirect = &((*indirect)->next);
         }
     }
+}
+
+void _dict_clear(dict* d)
+{
+    _clear_hash_table(d, serve_table(d), _hash_size(d));
     
-    free (d->ht);
+    d->ht[d->serve].size = 0;
+    free (serve_table(d));
     free (d->op);
 }
 
-dict_entry* dict_add(dict* d, void* key, void* val)
+void dict_release(dict* d)
 {
-    if (!d || !key) return NULL;
-    
-    uint64_t hash = dict_hash(d, key);
+    if (!d) return;
+
+    _dict_clear(d);
+
+    free (d);
+}
+
+
+dict_entry* _dict_add(dict*d, dict_ht* ht, void* key, void* val)
+{
+    uint32_t hash = dict_hash(ht->size, key);
     
     // invalid hash will return NULL
-    if (hash >= d->size) return NULL;
+    if (hash >= ht->size) return NULL;
 
-    dict_entry* he = d->ht[hash];
+    dict_entry* he = ht->table[hash];
     while (he){
         // if already exist, return NULL
-        if (dict_key_compare(d, key, he->key))
+        if (dict_key_compare(d, key, he->key.ptr))
             return NULL;
 
         he = he->next;
@@ -171,26 +178,62 @@ dict_entry* dict_add(dict* d, void* key, void* val)
     if (!he) return NULL;
 
     // push head
-    he->next = d->ht[hash];
-    d->ht[hash] = he;
+    he->next = ht->table[hash];
+    ht->table[hash] = he;
 
-    d->used ++;
+    ht->used ++;
     dict_set_key(d, he, key);
     dict_set_val(d, he, val);
 
     return he;
 }
 
+void _rehash(dict* d)
+{
+    uint32_t new_size = _get_next_hashsize(_hash_size(d));
+
+    idle_table(d) = (dict_entry**) malloc(new_size * sizeof(dict_entry*));
+    if (!idle_table(d)) return ;
+    d->ht[!d->serve].size = new_size;
+    d->ht[!d->serve].used = 0;
+
+    uint32_t i;
+    for (i=0; i < _hash_size(d); ++i){
+        dict_entry* he = serve_table(d)[i];
+        while (he){
+            if (NULL == _dict_add(d, &(d->ht[!d->serve]), he->key.ptr, he->val.ptr)){
+                //dict_release(new_d);
+                //return d;
+            }
+            he = he->next;
+        }
+    }
+
+    _clear_hash_table(d, serve_table(d), _hash_size(d));
+    table_swap(d);
+    //printf("rehash :%u\n", _hash_size(d));
+}
+
+dict_entry* dict_add(dict* d, void* key, void* val)
+{
+    if (!d) return NULL;
+
+    if (is_need_rehash(d))
+        _rehash(d);
+    
+    return _dict_add(d, &(d->ht[d->serve]), key, val);
+}
+
 dict_entry* dict_find(dict* d, void* key)
 {
-    if (!d || !key) return NULL;
+    if (!d) return NULL;
 
-    uint64_t hash = dict_hash(d, key);
-    if (hash >= d->size) return NULL;
+    uint32_t hash = dict_hash(_hash_size(d), key);
+    if (hash >= _hash_size(d)) return NULL;
 
-    dict_entry* he = d->ht[hash];
+    dict_entry* he = serve_table(d)[hash];
     while (he){
-        if (dict_key_compare(d, key, he->key))
+        if (dict_key_compare(d, key, he->key.ptr))
             return he;
 
         he = he->next;
@@ -201,21 +244,22 @@ dict_entry* dict_find(dict* d, void* key)
 
 int dict_delete(dict* d, void* key)
 {
-    if (!d || !key) return -1;
+    if (!d) return -1;
 
-    uint64_t hash = dict_hash(d, key);
-    if (hash > d->size) return -1;
+    uint32_t hash = dict_hash(_hash_size(d), key);
+    if (hash > _hash_size(d)) return -1;
 
-    dict_entry** in_he = &(d->ht[hash]);
+    dict_entry** in_he = &(serve_table(d)[hash]);
     while(*in_he){
-        if (dict_key_compare(d, key, (*in_he)->key)){
+        if (dict_key_compare(d, key, (*in_he)->key.ptr)){
             dict_entry* he = *in_he;
             dict_free_key(d, he);
             dict_free_val(d, he);
 
             *in_he = (*in_he)->next;
             free(he);
-            d->used --;
+
+            dict_decr(d);
             return 0;
         }
 
@@ -225,108 +269,15 @@ int dict_delete(dict* d, void* key)
     return -1;
 }
 
-
-#if 0
-dict* fdict_create(unsigned int hash_size, hash_match_func match, hash_calc_func calc)
-{
-    hash_size = get_better_hashnum(hash_size);
-    if (0 == hash_size) return NULL;
-    if (!match || !calc) return NULL;
-    
-    dict* d = (dict*) malloc (sizeof(dict));
-    if (!d) return NULL;
-    d->hash_size = hash_size;
-    d->calc = calc;
-    d->match = match;
-
-    d->hash_list = (flist**) malloc(hash_size * sizeof(flist*));
-    if (!d->hash_list) {
-        free (d);
-        return NULL;
-    }
-
-    index_t i = 0;
-    for (; i < hash_size; ++i){
-        d->hash_list[i] = flist_create(d->match);
-        // if create failed, release the resource alloced
-        if (!d->hash_list[i]){
-            index_t j;
-            for (j=0; j < i; ++j){
-                free(d->hash_list[j]);
-                d->hash_list[j] = NULL;
-            }
-            free(d->hash_list);
-            free(d);
-            return NULL;
-        }
-    }
-    
-    return d;
-}
-
-void fdict_release(dict* d)
-{
-    if (!d) return;
-    index_t i = 0;
-    for (; i < d->hash_size; ++i){
-        flist_release(d->hash_list[i]);
-    }
-
-    free(d->hash_list);
-    free (d);
-}
-
-/*@return: 0 success
- *         1 failed
- *         2 exist
- *@val: val is a customed pointer
- */
-int fdict_insert(dict* d, fdict_key_t key, void* val)
-{
-    if (!d) return FDICT_FAILED;
-    if (fdict_find(d, key)) return FDICT_EXIST;
-
-    index_t hash_slot = d->calc(d, key);
-    if (-1==hash_slot || hash_slot>=d->hash_size) 
-        return FDICT_FAILED;
-
-    if (!flist_push(d->hash_list[hash_slot], val))
-        return FDICT_FAILED;
-
-    return FDICT_SUCCESS;
-}
-
-void* fdict_find(dict* d, fdict_key_t key)
-{
-    if (!d) return NULL;
-    fnode* n;
-    index_t hash_slot = d->calc(d, key);
-    if (-1 == hash_slot || hash_slot >= d->hash_size)
-        return NULL;
-    n = flist_find(d->hash_list[hash_slot], key);
-    return n ? n->val : NULL;
-}
-int fdict_remove(dict* d, fdict_key_t key) { if (!d) return FDICT_FAILED; fnode* n = fdict_find(d, key); if (!n) return FDICT_NOTEXIST; 
-    index_t hash_slot = d->calc(d, key);
-    if (-1==hash_slot || hash_slot>=d->hash_size)
-        return FDICT_FAILED;
-
-    flist_delete(d->hash_list[hash_slot], key);
-    return FDICT_SUCCESS;
-}
-
-#endif
-
 /* key为整数的散列函数
  * 一个简单的散列函数
- * 注意: 要留意原key的类型是否与uint64_t是一致的。
+ * 注意: 要留意原key的类型是否与uint32_t是一致的。
  * 若不一致，不应该使用此散列函数，否则可能会导致错误，
- * 尤其是key的类型字节长为比uint64_t小时（如short,char,unsigned char）
+ * 尤其是key的类型字节长为比uint32_t小时（如short,char,unsigned char）
  */
-uint64_t hash_calc_int(uint64_t hash_size, void* key)
+uint32_t hash_calc_int(uint32_t hash_size, const void* key)
 {
-    if (!key) return -1;
-    uint64_t hash = *((uint64_t*)key) % hash_size;
+    uint32_t hash = (const long)key % hash_size;
     return hash;
 }
 
@@ -334,17 +285,17 @@ uint64_t hash_calc_int(uint64_t hash_size, void* key)
  * 计算简单，但是不适合key特别长的情况
  * 因为key太长的话，此散列函数会花很多时间计算
  */
-uint64_t hash_calc_str0(uint64_t hash_size, const void* key)
+uint32_t hash_calc_str0(uint32_t hash_size, const void* key)
 {
-    uint64_t hash = 0;
+    uint32_t hash = 0;
     char* k = (char*)key;
     while(*k != 0){
         hash = (hash << 5) + *k++;
     }
-    return (uint64_t) (hash % hash_size);
+    return (uint32_t) (hash % hash_size);
 }
 
-uint64_t hash_calc_str1(uint64_t hash_size, void* key)
+uint32_t hash_calc_str1(uint32_t hash_size, const void* key)
 {
     if (!key) return -1;
     
@@ -356,9 +307,22 @@ uint64_t hash_calc_str1(uint64_t hash_size, void* key)
         name++;
     }
     hash &= 0x0FFFFFFF;
-    return (uint64_t) (hash % hash_size);
+    return (uint32_t) (hash % hash_size);
 }
 
+void print_dict(dict* d, void (*p)(void*, void*))
+{
+    int i;
+    for (i=0; i < _hash_size(d); ++i){
+        printf ("[%4u]: ", i);
+        dict_entry* he = serve_table(d)[i];
+        while (he){
+            p(he->key.ptr, he->val.ptr);
+            he = he->next;
+        }
+        printf("\n");
+    }
+}
 #ifdef FDICT_MAIN
 #include <assert.h>
 #include <stdio.h>
@@ -411,32 +375,6 @@ dict_option fruit_op = {
     fruit_free
 };
 
-/*
-void print_list(flist* l)
-{
-    fnode* n = l->next;
-    while(n){
-        node* v = n->val;
-        if (v){
-            printf(" %4d", v->value);
-        }
-        n = n->next;
-    }
-    puts("");
-}
-
-void print_dict(dict* d)
-{
-    if (!d) return;
-    puts("");
-    uint64_t i; 
-    for (i = 0; i < d->hash_size; ++i){
-        printf("[%2u]:", i);
-        print_list(d->hash_list[i]);
-    }
-    puts("");
-}
-*/
 
 fruit fruit_pool[] = {
     {"apple", 5999},
@@ -447,6 +385,13 @@ fruit fruit_pool[] = {
     {"peach", 7}
 };
 
+void print_fruit(void* key, void* val)
+{
+    (void)key;
+    fruit* f = (fruit*) val;
+    printf(" {%10s,%5d} ", f->name, f->price);
+}
+
 void testcase1()
 {
     dict* d = dict_create(&fruit_op);
@@ -454,46 +399,42 @@ void testcase1()
     
     assert(NULL!=dict_add(d, fruit_pool[0].name, &fruit_pool[0]));
     dict_entry* he = dict_find(d, "apple");
-    assert(he && (5999 == ((fruit*)he->val.v)->price));
+    assert(he && (5999 == ((fruit*)he->val.ptr)->price));
     assert(0 == dict_delete(d, "apple"));
     assert(!dict_find(d, "apple"));
+
+    dict_release(d);
 }
 
-#if 0
 void testcase2()
 {
     puts("testcase3");
-    dict* d;
-    GENERATE_DICT(d,10);
+    dict* d = dict_create(&fruit_op);
+    assert(d != NULL);
+
+    int pool_size = sizeof (fruit_pool) /sizeof(fruit_pool[0]), i;
+    for (i=0; i< pool_size; ++i){
+        assert(NULL!=dict_add(d, fruit_pool[i].name, &fruit_pool[i]));
+    }
     
-    node* node1 = generate(1, 1);
-    node* node2 = generate(2, 2);
-    node* node3 = generate(3, 3);
-    node* node5 = generate(5, 5);
-    node* node15 = generate(15, 15);
+    print_dict(d, print_fruit);
 
-    assert(FDICT_SUCCESS==fdict_insert(d, &node1->id, node1));
-    assert(FDICT_SUCCESS==fdict_insert(d, &node2->id, node2));
-    assert(FDICT_SUCCESS==fdict_insert(d, &node3->id, node3));
-    assert(FDICT_SUCCESS==fdict_insert(d, &node5->id, node5));
-    assert(FDICT_SUCCESS==fdict_insert(d, &node15->id, node15));
-    assert(FDICT_SUCCESS!=fdict_insert(d, &node3->id, node3));
-    print_dict(d);
-    assert(FDICT_SUCCESS==fdict_remove(d, &node5->id));
-    assert(FDICT_SUCCESS==fdict_remove(d, &node15->id));
-    assert(FDICT_SUCCESS!=fdict_remove(d, &node15->id));
-    assert(FDICT_SUCCESS==fdict_remove(d, &node3->id));
-    print_dict(d);
+    dict_entry* he = dict_find(d, "pear");
+    assert(he && (4 == ((fruit*)he->val.ptr)->price));
 
-    fdict_release(d);
-    free(node1); free(node2); free(node3); free(node5); free(node15);
+    he = dict_find(d, "watermelon");
+    assert(he && (3 == ((fruit*)he->val.ptr)->price));
+
+    he = dict_find(d, "unknow fruit");
+    assert(NULL == he);
+
+    dict_release(d);
 }
-#endif
 
 int main()
 {
     testcase1();
-    //testcase2();
+    testcase2();
 
     return 0;
 }

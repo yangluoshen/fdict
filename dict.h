@@ -4,18 +4,18 @@
 #include <stdint.h>
 
 typedef struct dict_entry{
-    void* key;
     union {
-        void* v;
-        uint64_t u64;
-        int64_t s64;
+        void* ptr;
+        uint32_t u32;
+        int32_t s32;
         double d;
-    }val;
+    } key, val;
+
     struct dict_entry* next;
 }dict_entry;
 
 typedef struct dict_option{
-    uint64_t (*hash_func)(uint64_t hash_size, const void* key);
+    uint32_t (*hash_func)(uint32_t hash_size, const void* key);
     int (*key_comp)(const void* key1, const void* key2);
     void* (*key_dup)(const void* key);
     void (*key_destructor)(void* key);
@@ -23,11 +23,16 @@ typedef struct dict_option{
     void (*val_destructor)(void* val);
 }dict_option;
 
+typedef struct dict_ht{
+    uint32_t size;
+    uint32_t used;
+    dict_entry** table;
+}dict_ht;
+
 typedef struct dict{
-    uint64_t size;
-    dict_entry** ht;
+    dict_ht ht[2];
     dict_option* op;
-    uint64_t used;
+    int serve;
 }dict;
 
 dict* dict_create(const dict_option* op);
@@ -36,4 +41,8 @@ dict_entry* dict_add(dict* d, void* key, void* val);
 int dict_delete(dict* d, void* key);
 void* fdict_find(dict* d, void* key);
 
+uint32_t hash_calc_int(uint32_t hash_size, const void* key);
+uint32_t hash_calc_str0(uint32_t hash_size, const void* key);
+uint32_t hash_calc_str1(uint32_t hash_size, const void* key);
+void print_dict(dict* d, void (*p)(void*, void*));
 #endif

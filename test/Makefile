@@ -1,11 +1,10 @@
-all: strkey full
+all: rehash str-int
 
-strkey: strkey.c ../fdict.c ../flist.c 
-	gcc -g $^ -o $@ -Wall -std=c99 -pedantic -I ../
+rehash: rehash.c ../dict.c ../dict.h
+	gcc -g $^ -o $@ -Wall -std=c99 -pedantic -I../
 
-full: full.c ../fdict.c ../flist.c
-	gcc -g $^ -o $@ -Wall -std=c99 -pedantic -I ../
-
+str-int: str.int.c ../dict.c ../dict.h
+	gcc -g $^ -o $@ -Wall -std=c99 -pedantic -I../
 
 clean:
-	rm -f strkey full
+	rm -f rehash str-int log core

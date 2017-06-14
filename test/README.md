@@ -3,8 +3,7 @@
 ##Usage
 
         make
-        ./strkey
-        ./full
+        ./rehash > log
         make clean
 
 

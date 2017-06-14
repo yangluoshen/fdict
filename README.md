@@ -27,12 +27,6 @@ or
 
 ## Interesting
 
-* HASHNUM_DIV
-
-  [Testcase](./test/full.c)
-  <p>HASHNUM_DIV的作用是为空间和时间的平衡做一些努力。
-  我们知道，装填因子(元素个数与散列表大小的比值)r越小，引起冲突的机会越小，但是代价是空闲的槽就越多，这样内存使用率就相对低了。
-  以key为整数时为例，HASHNUM_DIV保证了，只要key小于 hash_size，每条chain冲突数不大于HASHNUM_DIV。只要HASHNUM_DIV是个
-  相对较小的常量，这样的冲突是可以接受的。
-  当然前提是散列需要比较均匀，这点由hash_size保证， get_better_hashnum 能保证返回一个比较好的hash_size，一般为素数。</p>
-
+* rehash
+  当装填因子(FILL_FACTOR)大于50%时，将会进行rehash（再散列）。
+   
