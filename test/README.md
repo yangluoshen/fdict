@@ -3,7 +3,8 @@
 ##Usage
 
         make
-        ./rehash > log
+        ./int-int > log
+        time ./str-int > log
         make clean
 
 

@@ -39,7 +39,7 @@ dict* dict_create(const dict_option* op);
 void dict_release(dict* d);
 dict_entry* dict_add(dict* d, void* key, void* val);
 int dict_delete(dict* d, void* key);
-void* fdict_find(dict* d, void* key);
+dict_entry* dict_find(dict* d, void* key);
 
 uint32_t hash_calc_int(uint32_t hash_size, const void* key);
 uint32_t hash_calc_str0(uint32_t hash_size, const void* key);

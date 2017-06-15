@@ -87,6 +87,8 @@ int  _dict_init(dict* d, const dict_option* op, uint32_t hashsize)
     }
     d->ht[d->serve].size = hashsize;
     d->ht[d->serve].used = 0;
+    // valgrind would compain  "uninitialised value"
+    memset(serve_table(d), 0, sizeof(hashsize * sizeof(dict_entry*)));
 
     d->ht[!d->serve].table = NULL;
     
@@ -137,6 +139,7 @@ void _clear_hash_table(dict* d, dict_entry** table, uint32_t size)
             indirect = &((*indirect)->next);
         }
     }
+    free (table);
 }
 
 void _dict_clear(dict* d)
@@ -144,7 +147,6 @@ void _dict_clear(dict* d)
     _clear_hash_table(d, serve_table(d), _hash_size(d));
     
     d->ht[d->serve].size = 0;
-    free (serve_table(d));
     free (d->op);
 }
 
@@ -196,6 +198,8 @@ void _rehash(dict* d)
     if (!idle_table(d)) return ;
     d->ht[!d->serve].size = new_size;
     d->ht[!d->serve].used = 0;
+    // valgrind would compain  "uninitialised value"
+    memset(idle_table(d), 0, sizeof(new_size * sizeof(dict_entry*)));
 
     uint32_t i;
     for (i=0; i < _hash_size(d); ++i){
