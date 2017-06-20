@@ -45,4 +45,6 @@ uint32_t hash_calc_int(uint32_t hash_size, const void* key);
 uint32_t hash_calc_str0(uint32_t hash_size, const void* key);
 uint32_t hash_calc_str1(uint32_t hash_size, const void* key);
 void print_dict(dict* d, void (*p)(void*, void*));
+
+#define DICT_GETVAL(entry) ((entry)->val.ptr)
 #endif
