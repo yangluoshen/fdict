@@ -272,6 +272,96 @@ int dict_delete(dict* d, void* key)
     return -1;
 }
 
+/* hash calculation functions */
+
+uint32_t murmurhash2for32(const void *key, int len) {
+    /* 'm' and 'r' are mixing constants generated offline.
+     They're not really 'magic', they just happen to work well.  */
+    uint32_t seed = 5381;
+    const uint32_t m = 0x5bd1e995;
+    const int r = 24;
+
+    /* Initialize the hash to a 'random' value */
+    uint32_t h = seed ^ len;
+
+    /* Mix 4 bytes at a time into the hash */
+    const unsigned char *data = (const unsigned char *)key;
+
+    while(len >= 4) {
+        uint32_t k = *(uint32_t*)data;
+
+        k *= m;
+        k ^= k >> r;
+        k *= m;
+
+        h *= m;
+        h ^= k;
+
+        data += 4;
+        len -= 4;
+    }
+
+    /* Handle the last few bytes of the input array  */
+    switch(len) {
+    case 3: h ^= data[2] << 16;
+    case 2: h ^= data[1] << 8;
+    case 1: h ^= data[0]; h *= m;
+    };
+
+    /* Do a few final mixes of the hash to ensure the last few
+     * bytes are well-incorporated. */
+    h ^= h >> 13;
+    h *= m;
+    h ^= h >> 15;
+
+    return h;
+}
+
+uint64_t murmurhash2for64 (const void * key, int len) {
+    unsigned int seed = 0xadc83b19ULL;
+    const uint64_t m = 0xc6a4a7935bd1e995;
+    const int r = 47;
+    uint64_t h = seed ^ (len * m);
+    const uint8_t *data = (const uint8_t *)key;
+    const uint8_t *end = data + (len-(len&7));
+
+    while(data != end) {
+        uint64_t k;
+
+        k = (uint64_t) data[0];
+        k |= (uint64_t) data[1] << 8;
+        k |= (uint64_t) data[2] << 16;
+        k |= (uint64_t) data[3] << 24;
+        k |= (uint64_t) data[4] << 32;
+        k |= (uint64_t) data[5] << 40;
+        k |= (uint64_t) data[6] << 48;
+        k |= (uint64_t) data[7] << 56;
+
+        k *= m;
+        k ^= k >> r;
+        k *= m;
+        h ^= k;
+        h *= m;
+        data += 8;
+    }
+
+    switch(len & 7) {
+    case 7: h ^= (uint64_t)data[6] << 48;
+    case 6: h ^= (uint64_t)data[5] << 40;
+    case 5: h ^= (uint64_t)data[4] << 32;
+    case 4: h ^= (uint64_t)data[3] << 24;
+    case 3: h ^= (uint64_t)data[2] << 16;
+    case 2: h ^= (uint64_t)data[1] << 8;
+    case 1: h ^= (uint64_t)data[0];
+            h *= m;
+    };
+
+    h ^= h >> r;
+    h *= m;
+    h ^= h >> r;
+    return h;
+}
+
 /* key为整数的散列函数
  * 一个简单的散列函数
  * 注意: 要留意原key的类型是否与uint32_t是一致的。
@@ -310,6 +400,17 @@ uint32_t hash_calc_str1(uint32_t hash_size, const void* key)
         name++;
     }
     hash &= 0x0FFFFFFF;
+    return (uint32_t) (hash % hash_size);
+}
+
+uint32_t hash_calc_murmur(uint32_t hash_size, const void* key)
+{
+    if (!key) return -1;
+#if defined (__x86_64__)
+    uint64_t hash = murmurhash2for64(key, strlen((const char* )key));
+#else 
+    uint32_t hash = murmurhash2for32(key, strlen((const char*)key));
+#endif
     return (uint32_t) (hash % hash_size);
 }
 

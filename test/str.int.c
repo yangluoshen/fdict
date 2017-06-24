@@ -9,6 +9,14 @@
 
 #include "dict.h"
 
+typedef struct namelist{
+    char* name;
+    struct namelist* next;
+}namelist;
+
+const long max_nums = 1000000;
+namelist** nh;
+
 int str_comp (const void* key1, const void* key2)
 {
     return strcmp((const char*) key1, (const char*) key2) == 0;
@@ -21,6 +29,15 @@ void* name_dup(const void* s)
 
 dict_option str_op = {
     hash_calc_str1,
+    str_comp,
+    name_dup,
+    free,
+    NULL,
+    NULL
+};
+
+dict_option murmur_op = {
+    hash_calc_murmur,
     str_comp,
     name_dup,
     free,
@@ -52,10 +69,65 @@ void print_name(void* key, void* val)
     printf(" {%8s, %2ld} ", (char*)key, (long)val);
 }
 
-typedef struct namelist{
-    char* name;
-    struct namelist* next;
-}namelist;
+void test_add(dict* d)
+{
+    struct timeval st, et;
+    gettimeofday (&st, NULL);
+    namelist* nl = *nh;
+    long i;
+    for (i = 0; i < max_nums; ++i){
+        dict_add(d, nl->name, (void*)i);
+        nl = nl->next;
+    }
+    gettimeofday (&et, NULL);
+    printf("add  time usage: %8ldms\n", (et.tv_sec-st.tv_sec)*1000+(et.tv_usec/1000-st.tv_usec/1000));
+
+}
+
+void test_find(dict* d)
+{
+    struct timeval find_st, find_et;
+    gettimeofday(&find_st, NULL);
+    namelist* nn = *nh;
+    int count;
+    for (count=0; nn; count++){
+        if ((count % 97) == 0)
+            assert(NULL != dict_find(d, nn->name));
+
+        nn = nn->next;
+    }
+    gettimeofday(&find_et, NULL);
+    printf("find time usage: %8ldms\n", (find_et.tv_sec-find_st.tv_sec)*1000+(find_et.tv_usec/1000-find_st.tv_usec/1000));
+
+}
+
+void test_delete(dict* d)
+{
+    struct timeval free_st, free_et;
+    gettimeofday(&free_st, NULL);
+    dict_release(d);
+    gettimeofday(&free_et, NULL);
+    printf("free time usage: %8ldms\n", (free_et.tv_sec-free_st.tv_sec)*1000+(free_et.tv_usec/1000-free_st.tv_usec/1000));
+}
+
+namelist** init_namelist()
+{
+    namelist** nl = (namelist**) malloc(sizeof(namelist*));
+    assert(NULL != nl);
+    *nl = NULL;
+
+    long i;
+    for (i = 0; i<max_nums; ++i){
+        char* n = gen_name();
+        namelist* nn = (namelist*)malloc(sizeof(namelist));
+        assert(NULL!=nn);
+        nn->name = n;
+        nn->next = *nl;
+        *nl = nn;
+    }
+
+    return nl;
+}
 
 void free_namelist(namelist** nl)
 {
@@ -70,84 +142,31 @@ void free_namelist(namelist** nl)
 
 void testcase0()
 {
-    dict* d = dict_create(&str_op);
-    assert(NULL != d);
+    printf("difference between two kinds of hash calculate function\n");
+    dict* strd = dict_create(&str_op);
+    assert(NULL != strd);
+    dict* murd = dict_create(&murmur_op);
+    assert(NULL != murd);
 
-    namelist** nh = (namelist**) malloc(sizeof(namelist*));
-    assert(NULL != nh);
-    *nh = NULL;
+    nh = init_namelist();
 
+    printf("> common string hash calculate\n");
+    test_add(strd);
+    test_find(strd);
+    test_delete(strd);
 
-    struct timeval add_st, add_et, find_st, find_et, free_st, free_et;
-    gettimeofday(&add_st, NULL);
-    long i;
-    for (i = 0; i<1000000; ++i){
-        char* n = gen_name();
-        dict_add(d, n, (void*)i);
-        
-        namelist* nn = (namelist*)malloc(sizeof(namelist));
-        assert(NULL!=nn);
-        nn->name = n;
-        nn->next = *nh;
-        *nh = nn;
-    }
-    gettimeofday(&add_et, NULL);
-    printf("add  time usage: %8ldms\n", (add_et.tv_sec-add_st.tv_sec)*1000+(add_et.tv_usec/1000-add_st.tv_usec/1000));
+    printf("\n> use murmurhash \n");
+    test_add(murd);
+    test_find(murd);
+    test_delete(murd);
 
     //print_dict(d, print_name);
-
-    gettimeofday(&find_st, NULL);
-    namelist* nn = *nh;
-    int count;
-    for (count=0; nn; count++){
-        if ((count % 97) == 0)
-            assert(NULL != dict_find(d, nn->name));
-
-        nn = nn->next;
-    }
-    gettimeofday(&find_et, NULL);
-    printf("find time usage: %8ldms\n", (find_et.tv_sec-find_st.tv_sec)*1000+(find_et.tv_usec/1000-find_st.tv_usec/1000));
-
-    gettimeofday(&free_st, NULL);
-    free_namelist(nh);
-    dict_release(d);
-    gettimeofday(&free_et, NULL);
-    printf("free time usage: %8ldms\n", (free_et.tv_sec-free_st.tv_sec)*1000+(free_et.tv_usec/1000-free_st.tv_usec/1000));
-}
-
-
-void testcase2()
-{
-
-    namelist** nh = (namelist**) malloc(sizeof(namelist*));
-    assert(NULL != nh);
-    *nh = NULL;
-
-    int i;
-    for (i=0; i< 10; ++i){
-        char* n = gen_name();
-        printf ("%d:%7s\n",i, n);
-
-        namelist* nn = (namelist*)malloc(sizeof(namelist));
-        assert(NULL!=nn);
-        nn->name = n;
-        nn->next = *nh;
-        *nh = nn;
-    }
-
-    namelist* nl = *nh;
-    while (nl){
-        printf("%s\n", nl->name);
-        nl = nl->next;
-    }
-
     free_namelist(nh);
 }
 
 int main()
 {
     testcase0();
-    //testcase2();
 
     return 0;
 }
