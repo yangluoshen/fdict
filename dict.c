@@ -94,13 +94,8 @@ int  _dict_init(dict* d, const dict_option* op, uint32_t hashsize)
     }
 
     d->ht[!d->serve].table = NULL;
-    
-    d->op->hash_func = op->hash_func;
-    d->op->key_dup = op->key_dup;
-    d->op->val_dup = op->val_dup;
-    d->op->key_comp = op->key_comp;
-    d->op->key_destructor = op->key_destructor;
-    d->op->val_destructor = op->val_destructor;
+
+    *(d->op) = *op;
 
     return 0;
 }
@@ -125,29 +120,29 @@ dict* dict_create(const dict_option* op)
     return _dict_create(op, prime_pool[0]);
 }
 
-void _clear_hash_table(dict* d, dict_entry** table, uint32_t size)
+void _clear_hash_table(dict* d, uint32_t size)
 {
     uint32_t i;
     for (i=0; i<size; ++i){
-        if (table[i] == NULL) continue;
+        if (serve_table(d)[i] == NULL) continue;
 
-        dict_entry** indirect = &(table[i]);
-        while (*indirect) {
-            dict_entry* he = *indirect;
-
+        dict_entry* prev = serve_table(d)[i];
+        dict_entry* he = prev;
+        while (he) {
             dict_free_key(d, he);
             dict_free_val(d, he);
+            prev = he->next;
             free (he);
-            // next loop
-            indirect = &((*indirect)->next);
+            he = prev;
         }
     }
-    free (table);
+    free (serve_table(d));
+    serve_table(d) = NULL;
 }
 
 void _dict_clear(dict* d)
 {
-    _clear_hash_table(d, serve_table(d), _hash_size(d));
+    _clear_hash_table(d, _hash_size(d));
     
     d->ht[d->serve].size = 0;
     free (d->op);
@@ -217,7 +212,7 @@ void _rehash(dict* d)
         }
     }
 
-    _clear_hash_table(d, serve_table(d), _hash_size(d));
+    _clear_hash_table(d, _hash_size(d));
     table_swap(d);
     //printf("rehash :%u\n", _hash_size(d));
 }

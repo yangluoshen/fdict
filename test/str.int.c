@@ -35,7 +35,7 @@ char* names[] = {
 
 char* gen_name()
 {
-    const int len = 7;
+    const int len = 1024;
     char name[len];
     int i;
     for (i=0; i < len-1; ++i){
@@ -81,7 +81,7 @@ void testcase0()
     struct timeval add_st, add_et, find_st, find_et, free_st, free_et;
     gettimeofday(&add_st, NULL);
     long i;
-    for (i = 0; i<10000000; ++i){
+    for (i = 0; i<1000000; ++i){
         char* n = gen_name();
         dict_add(d, n, (void*)i);
         
@@ -95,7 +95,7 @@ void testcase0()
     printf("add  time usage: %8ldms\n", (add_et.tv_sec-add_st.tv_sec)*1000+(add_et.tv_usec/1000-add_st.tv_usec/1000));
 
     //print_dict(d, print_name);
-    //
+
     gettimeofday(&find_st, NULL);
     namelist* nn = *nh;
     int count;
